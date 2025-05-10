@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI YouTube Video Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <link href="output.css" rel="stylesheet">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; overflow: hidden; }
+        #particles-js {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            z-index: -1;
+        }
+        #visualizer { display: none; }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="particles-js"></div>
+    <div class="container p-6 m-4 max-w-md mx-auto mt-10">
+        <h1 class="text-3xl font-bold mb-6 text-center text-gray-800">AI YouTube Video Generator</h1>
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2 text-gray-700">Upload Image (e.g., Sidhu Moosewala Poster)</label>
+            <input type="file" id="imageInput" accept="image/*" class="w-full p-2 border rounded bg-gray-50">
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2 text-gray-700">Upload Audio (e.g., AI Song)</label>
+            <input type="file" id="audioInput" accept="audio/*" class="w-full p-2 border rounded bg-gray-50">
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2 text-gray-700">Song Keyword (e.g., Sidhu Moosewala AI)</label>
+            <input type="text" id="keywordInput" placeholder="Sidhu Moosewala AI" class="w-full p-2 border rounded bg-gray-50">
+        </div>
+        <button onclick="generateVideo()" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300">Generate Video</button>
+        <div id="output" class="mt-4 text-gray-700"></div>
+        <canvas id="visualizer"></canvas>
+    </div>
+
+    <script>
+        // Initialize particles.js
+        particlesJS('particles-js', {
+            particles: {
+                number: { value: 80, density: { enable: true, value_area: 800 } },
+                color: { value: '#ffffff' },
+                shape: { type: 'circle' },
+                opacity: { value: 0.5, random: true },
+                size: { value: 3, random: true },
+                line_linked: { enable: true, distance: 150, color: '#ffffff', opacity: 0.4, width: 1 },
+                move: { enable: true, speed: 3, direction: 'none', random: false, straight: false, out_mode: 'out', bounce: false }
+            },
+            interactivity: {
+                detect_on: 'canvas',
+                events: { onhover: { enable: true, mode: 'repulse' }, onclick: { enable: true, mode: 'push' }, resize: true },
+                modes: { repulse: { distance: 100, duration: 0.4 }, push: { particles_nb: 4 } }
+            },
+            retina_detect: true
+        });
+
+        let fft;
+        let audio;
+        let img;
+        let videoFrames = [];
+        const { createFFmpeg, fetchFile } = FFmpeg;
+        const ffmpeg = createFFmpeg({ log: true });
+
+        // Load FFmpeg
+        async function loadFFmpeg() {
+            if (!ffmpeg.isLoaded()) await ffmpeg.load();
+        }
+
+        // p5.js setup for visualizer
+        function setup() {
+            let cnv = createCanvas(1280, 720);
+            cnv.parent('visualizer');
+            fft = new p5.FFT();
+        }
+
+        function draw() {
+            if (!audio || !img) return;
+            background(0);
+            image(img, 0, 0, width, height);
+
+            // Visualizer: Draw bars based on audio amplitude
+            let spectrum = fft.analyze();
+            noStroke();
+            fill(255, 0, 0);
+            for (let i = 0; i < spectrum.length; i += 10) {
+                let x = map(i, 0, spectrum.length, 0, width);
+                let h = -height + map(spectrum[i], 0, 255, height, 0);
+                rect(x, height, width / spectrum.length, h / 2);
+            }
+
+            // Capture frame for video
+            let frame = document.getElementById('visualizer').toDataURL('image/png');
+            videoFrames.push(frame);
+        }
+
+        // Generate SEO metadata
+        function generateMetadata(keyword) {
+            const title = `${keyword} 2025 | Visualizer Video 🎵`;
+            const description = `Check out this amazing ${keyword} visualizer video! Perfect for fans of Punjabi music. Subscribe for more AI-generated songs! #${keyword.replace(/\s/g, '')} #PunjabiMusic #Visualizer`;
+            const tags = [keyword, 'Punjabi Music', 'Visualizer', 'AI Song', '2025', 'Sidhu Moosewala'].join(', ');
+            return { title, description, tags };
+        }
+
+        // Main function to generate video
+        async function generateVideo() {
+            await loadFFmpeg();
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = 'Processing...';
+
+            // Get inputs
+            const imageFile = document.getElementById('imageInput').files[0];
+            const audioFile = document.getElementById('audioInput').files[0];
+            const keyword = document.getElementById('keywordInput').value || 'Sidhu Moosewala AI';
+
+            if (!imageFile || !audioFile) {
+                outputDiv.innerHTML = 'Please upload both an image and an audio file.';
+                return;
+            }
+
+            // Load image into p5.js
+            img = loadImage(URL.createObjectURL(imageFile));
+
+            // Load audio into p5.js
+            audio = new p5.SoundFile(URL.createObjectURL(audioFile), () => {
+                audio.play();
+                fft.setInput(audio);
+            });
+
+            // Wait for audio to load and play, capture frames
+            videoFrames = [];
+            setTimeout(async () => {
+                audio.stop();
+
+                // Use FFmpeg to create video from frames and audio
+                ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(audioFile));
+                for (let i = 0; i < videoFrames.length; i++) {
+                    const frameData = await fetch(videoFrames[i]).then(res => res.blob());
+                    ffmpeg.FS('writeFile', `frame${i}.png`, await fetchFile(frameData));
+                }
+
+                // FFmpeg command to create video
+                await ffmpeg.run(
+                    '-framerate', '30',
+                    '-i', 'frame%d.png',
+                    '-i', 'audio.mp3',
+                    '-c:v', 'libx264',
+                    '-c:a', 'aac',
+                    '-shortest',
+                    'output.mp4'
+                );
+
+                // Download the video
+                const data = ffmpeg.FS('readFile', 'output.mp4');
+                const videoUrl = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+                const videoLink = document.createElement('a');
+                videoLink.href = videoUrl;
+                videoLink.download = 'output.mp4';
+                videoLink.click();
+
+                // Generate and display SEO metadata
+                const metadata = generateMetadata(keyword);
+                outputDiv.innerHTML = `
+                    <p><strong>Video Generated!</strong></p>
+                    <p><strong>Title:</strong> ${metadata.title}</p>
+                    <p><strong>Description:</strong> ${metadata.description}</p>
+                    <p><strong>Tags:</strong> ${metadata.tags}</p>
+                `;
+            }, audio.duration() * 1000 + 1000); // Wait for audio duration
+        }
+    </script>
+</body>
+</html>
